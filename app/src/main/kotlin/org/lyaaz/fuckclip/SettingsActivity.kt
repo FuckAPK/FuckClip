@@ -11,6 +11,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -101,7 +103,11 @@ fun SettingsScreen() {
                 onCheckedChange = {
                     switchStatus[app.packageName] = it
                     prefs.edit { putBoolean(app.packageName, it) }
-                }
+                },
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                    fadeOutSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
+                )
             )
         }
     }
@@ -114,9 +120,10 @@ fun SwitchPreferenceItem(
     icon: Drawable,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = 8.dp, horizontal = 16.dp)
@@ -151,7 +158,6 @@ fun SwitchPreferenceItem(
             }
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
-
     }
 }
 
