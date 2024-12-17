@@ -1,0 +1,21 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: FuckAPK/workflows/.github/workflows/build.yml@main
+    permissions:
+      contents: write
+    secrets: inherit

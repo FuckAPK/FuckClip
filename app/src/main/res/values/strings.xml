@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Fuck Clipboard</string>
+    <string name="app_desc">Allow apps to access clipboard in background</string>
+</resources>
