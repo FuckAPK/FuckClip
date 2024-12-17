@@ -83,9 +83,9 @@ fun SettingsScreen() {
                 name = it.loadLabel(pm).toString(),
                 packageName = it.packageName
             )
-        }.sortedBy {
-            it.name
-        }
+        }.sortedWith(
+            compareBy({!switchStatus.getOrDefault(it.packageName, false)}, {it.packageName})
+        )
 
     LazyColumn(
         modifier = Modifier
