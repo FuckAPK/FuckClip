@@ -35,9 +35,10 @@ class MainHook : IXposedHookLoadPackage {
                     Int::class.java,
                     Int::class.java,
                     "com.android.server.clipboard.ClipboardService\$Clipboard",
-                    Int::class.java,
                     ClipboardNotificationHook
                 )
+            }.onFailure {
+                XposedBridge.log(it)
             }
         }
     }
@@ -57,7 +58,7 @@ class MainHook : IXposedHookLoadPackage {
     object ClipboardNotificationHook : XC_MethodHook() {
 
         override fun beforeHookedMethod(param: MethodHookParam) {
-            val packageName = param.args[1] as String
+            val packageName = param.args[0] as String
             if (settings.isEnabled(packageName)) {
                 param.result = null
             }
