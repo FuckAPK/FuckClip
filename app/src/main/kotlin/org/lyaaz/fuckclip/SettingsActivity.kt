@@ -92,7 +92,8 @@ fun SettingsScreen() {
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .systemBarsPadding()
+            .statusBarsPadding()
+            .imePadding()
     ) {
         items(apps) { app ->
             SwitchPreferenceItem(
@@ -107,6 +108,13 @@ fun SettingsScreen() {
                 modifier = Modifier.animateItem(
                     fadeInSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
                     fadeOutSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
+                )
+            )
+        }
+        item {
+            Spacer(
+                modifier = Modifier.windowInsetsBottomHeight(
+                    WindowInsets.systemBars
                 )
             )
         }
