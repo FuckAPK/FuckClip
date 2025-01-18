@@ -38,7 +38,21 @@ class MainHook : IXposedHookLoadPackage {
                     ClipboardNotificationHook
                 )
             }.onFailure {
-                XposedBridge.log(it)
+                runCatching {
+                    XposedHelpers.findAndHookMethod(
+                        "com.android.server.clipboard.ClipboardService",
+                        lpparam.classLoader,
+                        "showAccessNotificationLocked",
+                        String::class.java,
+                        Int::class.java,
+                        Int::class.java,
+                        "com.android.server.clipboard.ClipboardService\$Clipboard",
+                        Int::class.java,
+                        ClipboardNotificationHook
+                    )
+                }.onFailure {
+                    XposedBridge.log(it)
+                }
             }
         }
     }
