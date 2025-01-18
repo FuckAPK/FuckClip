@@ -50,7 +50,6 @@ class MainHook : IXposedHookLoadPackage {
             prefs.reload()
             if (settings.isEnabled(packageName)) {
                 param.result = true
-                XposedBridge.log("Clip allowed for app: $packageName")
             }
         }
     }
