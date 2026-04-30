@@ -55,13 +55,22 @@ android {
         buildConfig = true
         compose = true
     }
+    packaging {
+        resources {
+            merges += "META-INF/xposed/*"
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+    kotlinOptions {
+        jvmTarget = "21"
+    }
 }
 dependencies {
-    compileOnly("de.robv.android.xposed:api:82")
+    compileOnly("io.github.libxposed:api:101.0.1")
+    implementation("io.github.libxposed:service:101.0.0")
     implementation("com.google.android.material:material:1.12.0")
 
     // compose

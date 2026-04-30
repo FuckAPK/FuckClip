@@ -1,6 +1,7 @@
 package org.lyaaz.fuckclip
 
 import android.annotation.SuppressLint
+import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -22,8 +23,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -31,18 +35,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import io.github.libxposed.service.XposedService
+import io.github.libxposed.service.XposedServiceHelper
 import org.lyaaz.fuckclip.ui.AppTheme as Theme
 
-class SettingsActivity : ComponentActivity() {
+class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListener {
 
+    companion object {
+        private var mService: XposedService? = null
+    }
+
+    private lateinit var prefs: SharedPreferences
+    private lateinit var settings: Settings
+    private var isReady by mutableStateOf(false)
     private var currentUiMode: Int? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        mService?.let { onServiceBind(it) }
+        XposedServiceHelper.registerListener(this)
         enableEdgeToEdge()
         currentUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         setContent {
             Theme {
-                SettingsScreen()
+                if (isReady) {
+                    SettingsScreen(prefs, settings)
+                }
             }
         }
     }
@@ -54,22 +72,32 @@ class SettingsActivity : ComponentActivity() {
             recreate()
         }
     }
+
+    override fun onServiceBind(service: XposedService) {
+        mService = service
+        prefs = service.getRemotePreferences("${BuildConfig.APPLICATION_ID}_preferences")
+        settings = Settings.getInstance(prefs)
+        isReady = true
+    }
+
+    override fun onServiceDied(service: XposedService) {
+        mService = null
+        isReady = false
+    }
 }
 
 @Preview
 @Composable
 fun SettingsScreenPreview() {
     Theme {
-        SettingsScreen()
+        SettingsScreen(null, null)
     }
 }
 
 @SuppressLint("QueryPermissionsNeeded")
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(prefs: SharedPreferences?, settings: Settings?) {
     val context = LocalContext.current
-    val prefs = Utils.getPrefs(context)
-    val settings = Settings.getInstance(prefs)
     val pm = context.packageManager
     val switchStatus = remember {
         mutableStateMapOf<String, Boolean>()
@@ -79,7 +107,7 @@ fun SettingsScreen() {
             (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0
         }.map {
             switchStatus[it.packageName] =
-                settings.isEnabled(it.packageName)
+                settings?.isEnabled(it.packageName) ?: false
             AppView(
                 icon = it.loadIcon(pm),
                 name = it.loadLabel(pm).toString(),
@@ -103,7 +131,7 @@ fun SettingsScreen() {
                 checked = switchStatus.getOrDefault(app.packageName, false),
                 onCheckedChange = {
                     switchStatus[app.packageName] = it
-                    prefs.edit { putBoolean(app.packageName, it) }
+                    prefs?.edit { putBoolean(app.packageName, it) }
                 },
                 modifier = Modifier.animateItem(
                     fadeInSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),

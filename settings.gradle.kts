@@ -11,9 +11,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://api.xposed.info")
-        }
+        maven("https://jitpack.io")
     }
 }
 
