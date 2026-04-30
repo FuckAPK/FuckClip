@@ -1,18 +1,38 @@
 package org.lyaaz.fuckclip
 
-import de.robv.android.xposed.*
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import android.content.SharedPreferences
+import android.util.Log
+import io.github.libxposed.api.XposedInterface.Chain
+import io.github.libxposed.api.XposedInterface.Hooker
+import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 
-class MainHook : IXposedHookLoadPackage {
-    override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        if (lpparam.packageName != "android") {
-            return
-        }
+class MainHook : XposedModule() {
+
+    private lateinit var prefs: SharedPreferences
+    private lateinit var settings: Settings
+
+    override fun onModuleLoaded(param: ModuleLoadedParam) {
+        prefs = getRemotePreferences("${BuildConfig.APPLICATION_ID}_preferences")
+        settings = Settings.getInstance(prefs)
+    }
+
+    override fun onSystemServerStarting(param: SystemServerStartingParam) {
+        val classLoader = param.classLoader
+
+        val clipboardServiceClass = runCatching {
+            Class.forName(
+                "com.android.server.clipboard.ClipboardService",
+                false,
+                classLoader
+            )
+        }.onFailure {
+            log(Log.ERROR, TAG, "Failed to find ClipboardService", it)
+        }.getOrNull() ?: return
 
         runCatching {
-            XposedHelpers.findAndHookMethod(
-                "com.android.server.clipboard.ClipboardService",
-                lpparam.classLoader,
+            val method = clipboardServiceClass.getDeclaredMethod(
                 "clipboardAccessAllowed",
                 Int::class.java,
                 String::class.java,
@@ -21,69 +41,75 @@ class MainHook : IXposedHookLoadPackage {
                 Int::class.java,
                 Int::class.java,
                 Boolean::class.java,
-                ClipboardAccessAllowedHook
             )
+            hook(method).intercept(ClipboardAccessAllowedHooker())
         }.onFailure {
-            XposedBridge.log(it)
+            log(Log.ERROR, TAG, "Failed to hook clipboardAccessAllowed", it)
         }.onSuccess {
+            log(Log.INFO, TAG, "FC: hooked clipboardAccessAllowed")
+            hookNotification(clipboardServiceClass, classLoader)
+        }
+    }
+
+    private fun hookNotification(
+        clipboardServiceClass: Class<*>,
+        classLoader: ClassLoader
+    ) {
+        val clipboardClass = runCatching {
+            classLoader.loadClass("com.android.server.clipboard.ClipboardService\$Clipboard")
+        }.getOrNull() ?: return
+
+        runCatching {
+            val method = clipboardServiceClass.getDeclaredMethod(
+                "showAccessNotificationLocked",
+                String::class.java,
+                Int::class.java,
+                Int::class.java,
+                clipboardClass
+            )
+            hook(method).intercept(ClipboardNotificationHooker())
+        }.onFailure {
             runCatching {
-                XposedHelpers.findAndHookMethod(
-                    "com.android.server.clipboard.ClipboardService",
-                    lpparam.classLoader,
+                val method = clipboardServiceClass.getDeclaredMethod(
                     "showAccessNotificationLocked",
                     String::class.java,
                     Int::class.java,
                     Int::class.java,
-                    "com.android.server.clipboard.ClipboardService\$Clipboard",
-                    ClipboardNotificationHook
+                    clipboardClass,
+                    Int::class.java
                 )
+                hook(method).intercept(ClipboardNotificationHooker())
             }.onFailure {
-                runCatching {
-                    XposedHelpers.findAndHookMethod(
-                        "com.android.server.clipboard.ClipboardService",
-                        lpparam.classLoader,
-                        "showAccessNotificationLocked",
-                        String::class.java,
-                        Int::class.java,
-                        Int::class.java,
-                        "com.android.server.clipboard.ClipboardService\$Clipboard",
-                        Int::class.java,
-                        ClipboardNotificationHook
-                    )
-                }.onFailure {
-                    XposedBridge.log(it)
-                }
+                log(Log.ERROR, TAG, "Failed to hook showAccessNotificationLocked", it)
+            }.onSuccess {
+                log(Log.INFO, TAG, "FC: hooked showAccessNotificationLocked")
             }
+        }.onSuccess {
+            log(Log.INFO, TAG, "FC: hooked showAccessNotificationLocked")
         }
     }
 
-    object ClipboardAccessAllowedHook : XC_MethodHook() {
-
-        override fun beforeHookedMethod(param: MethodHookParam) {
-            val packageName = param.args[1] as String
-            prefs.reload()
+    private inner class ClipboardAccessAllowedHooker : Hooker {
+        override fun intercept(chain: Chain): Any? {
+            val packageName = chain.getArg(1) as String
             if (settings.isEnabled(packageName)) {
-                param.result = true
+                return true
             }
+            return chain.proceed()
         }
     }
 
-    object ClipboardNotificationHook : XC_MethodHook() {
-
-        override fun beforeHookedMethod(param: MethodHookParam) {
-            val packageName = param.args[0] as String
+    private inner class ClipboardNotificationHooker : Hooker {
+        override fun intercept(chain: Chain): Any? {
+            val packageName = chain.getArg(0) as String
             if (settings.isEnabled(packageName)) {
-                param.result = null
+                return null
             }
+            return chain.proceed()
         }
     }
 
     companion object {
-        private val prefs: XSharedPreferences by lazy {
-            XSharedPreferences(BuildConfig.APPLICATION_ID)
-        }
-        private val settings: Settings by lazy {
-            Settings.getInstance(prefs)
-        }
+        private const val TAG = "FuckClip"
     }
 }
