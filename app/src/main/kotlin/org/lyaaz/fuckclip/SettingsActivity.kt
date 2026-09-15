@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
-import org.lyaaz.fuckclip.ui.AppTheme as Theme
+import org.lyaaz.ui.theme.AppTheme as Theme
 
 class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListener {
 
@@ -57,7 +57,7 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
         enableEdgeToEdge()
         currentUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         setContent {
-            Theme {
+            Theme(applyStatusBarColor = true) {
                 if (isReady) {
                     SettingsScreen(prefs, settings)
                 }
@@ -89,7 +89,7 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
 @Preview
 @Composable
 fun SettingsScreenPreview() {
-    Theme {
+    Theme(applyStatusBarColor = true) {
         SettingsScreen(null, null)
     }
 }

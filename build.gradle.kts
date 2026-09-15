@@ -1,4 +1,2 @@
-plugins {
-    id("com.android.application") version "8.13.2" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.20" apply false
-}
+// Shared configuration, plugin versions and dependency versions live in the
+// `build-logic` submodule: https://github.com/FuckAPK/build-logic
