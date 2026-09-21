@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.lyaaz.ui.theme.AppTheme as Theme
 
 class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListener {
@@ -102,20 +105,24 @@ fun SettingsScreen(prefs: SharedPreferences?, settings: Settings?) {
     val switchStatus = remember {
         mutableStateMapOf<String, Boolean>()
     }
-    val apps = pm.getInstalledApplications(0)
-        .filter {
-            (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0
-        }.map {
-            switchStatus[it.packageName] =
-                settings?.isEnabled(it.packageName) ?: false
-            AppView(
-                icon = it.loadIcon(pm),
-                name = it.loadLabel(pm).toString(),
-                packageName = it.packageName
-            )
-        }.sortedWith(
-            compareBy({!switchStatus.getOrDefault(it.packageName, false)}, {it.packageName})
-        )
+    val apps by produceState<List<AppView>>(initialValue = emptyList(), key1 = settings) {
+        value = withContext(Dispatchers.IO) {
+            pm.getInstalledApplications(0)
+                .filter {
+                    (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+                }.map {
+                    switchStatus[it.packageName] =
+                        settings?.isEnabled(it.packageName) ?: false
+                    AppView(
+                        icon = it.loadIcon(pm),
+                        name = it.loadLabel(pm).toString(),
+                        packageName = it.packageName
+                    )
+                }.sortedWith(
+                    compareBy({ !switchStatus.getOrDefault(it.packageName, false) }, { it.packageName })
+                )
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -123,7 +130,7 @@ fun SettingsScreen(prefs: SharedPreferences?, settings: Settings?) {
             .statusBarsPadding()
             .imePadding()
     ) {
-        items(apps) { app ->
+        items(apps, key = { it.packageName }) { app ->
             SwitchPreferenceItem(
                 name = app.name,
                 packageName = app.packageName,
@@ -198,10 +205,12 @@ fun SwitchPreferenceItem(
 }
 
 fun Drawable.toBitmap(): Bitmap {
-    if (this is BitmapDrawable) {
-        return this.bitmap
+    if (this is BitmapDrawable && bitmap != null) {
+        return bitmap
     }
-    val bitmap = Bitmap.createBitmap(intrinsicWidth, intrinsicHeight, Bitmap.Config.ARGB_8888)
+    val width = if (intrinsicWidth > 0) intrinsicWidth else 1
+    val height = if (intrinsicHeight > 0) intrinsicHeight else 1
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     setBounds(0, 0, canvas.width, canvas.height)
     draw(canvas)
