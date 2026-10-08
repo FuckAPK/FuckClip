@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -100,28 +101,37 @@ fun SettingsScreenPreview() {
 @SuppressLint("QueryPermissionsNeeded")
 @Composable
 fun SettingsScreen(prefs: SharedPreferences?, settings: Settings?) {
+    key(prefs, settings) {
+        SettingsScreenContent(prefs, settings)
+    }
+}
+
+@SuppressLint("QueryPermissionsNeeded")
+@Composable
+private fun SettingsScreenContent(prefs: SharedPreferences?, settings: Settings?) {
     val context = LocalContext.current
     val pm = context.packageManager
-    val switchStatus = remember {
+    val switchStatus = remember(settings) {
         mutableStateMapOf<String, Boolean>()
     }
     val apps by produceState<List<AppView>>(initialValue = emptyList(), key1 = settings) {
-        value = withContext(Dispatchers.IO) {
+        val loaded = withContext(Dispatchers.IO) {
             pm.getInstalledApplications(0)
                 .filter {
                     (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0
                 }.map {
-                    switchStatus[it.packageName] =
-                        settings?.isEnabled(it.packageName) ?: false
                     AppView(
                         icon = it.loadIcon(pm),
                         name = it.loadLabel(pm).toString(),
-                        packageName = it.packageName
+                        packageName = it.packageName,
+                        enabled = settings?.isEnabled(it.packageName) ?: false
                     )
                 }.sortedWith(
-                    compareBy({ !switchStatus.getOrDefault(it.packageName, false) }, { it.packageName })
+                    compareBy({ !it.enabled }, { it.packageName })
                 )
         }
+        switchStatus.putAll(loaded.associate { it.packageName to it.enabled })
+        value = loaded
     }
 
     LazyColumn(
@@ -178,7 +188,7 @@ fun SwitchPreferenceItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
-                bitmap = icon.toBitmap().asImageBitmap(),
+                bitmap = remember(icon) { icon.toBitmap().asImageBitmap() },
                 contentDescription = "App Icon",
                 modifier = Modifier
                     .size(48.dp)
@@ -220,5 +230,6 @@ fun Drawable.toBitmap(): Bitmap {
 data class AppView(
     val icon: Drawable,
     val name: String,
-    val packageName: String
+    val packageName: String,
+    val enabled: Boolean = false
 )

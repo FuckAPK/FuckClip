@@ -9,12 +9,6 @@ class Settings private constructor(private val prefs: SharedPreferences) {
     }
 
     companion object {
-        @Volatile
-        private var INSTANCE: Settings? = null
-        fun getInstance(prefs: SharedPreferences): Settings {
-            return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Settings(prefs).also { INSTANCE = it }
-            }
-        }
+        fun getInstance(prefs: SharedPreferences): Settings = Settings(prefs)
     }
 }
