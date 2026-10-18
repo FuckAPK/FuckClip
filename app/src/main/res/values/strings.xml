@@ -1,4 +1,16 @@
 <resources>
     <string name="app_name">Fuck Clipboard</string>
     <string name="app_desc">Allow apps to access clipboard in background</string>
+    <string name="clipboard_access">Background clipboard access</string>
+    <string name="clipboard_access_description">Allowed apps can read the clipboard in the background without access notifications. Only enable apps you trust.</string>
+    <string name="enabled_summary">%1$d of %2$d apps allowed</string>
+    <string name="search_apps">Search app name or package</string>
+    <string name="all_apps">All apps</string>
+    <string name="enabled_apps">Allowed</string>
+    <string name="loading_apps">Loading apps…</string>
+    <string name="no_apps">No user-installed apps found.</string>
+    <string name="no_search_results">No apps match your search.</string>
+    <string name="no_enabled_apps">No apps allowed yet. Select All apps to enable one.</string>
+    <string name="service_unavailable">Xposed service not connected</string>
+    <string name="service_unavailable_description">Enable Fuck Clipboard in your Xposed manager and select System Framework as its scope. Restart Android after activation, then reopen this page from the manager. Settings are unavailable until the service connects.</string>
 </resources>

@@ -72,14 +72,19 @@ with tempfile.TemporaryDirectory(prefix='fuckapk-regressions-') as temp:
     runtime_jar = work / 'compose-runtime.jar'
     with zipfile.ZipFile(runtime_aar[0]) as archive:
         runtime_jar.write_bytes(archive.read('classes.jar'))
+    saveable_aar = list((CACHE / 'androidx.compose.runtime' / 'runtime-saveable-android' / '1.9.2').rglob('*.aar'))
+    if not saveable_aar:
+        raise SystemExit('Missing cached Compose saveable runtime: 1.9.2')
+    saveable_jar = work / 'compose-saveable.jar'
+    with zipfile.ZipFile(saveable_aar[0]) as archive:
+        saveable_jar.write_bytes(archive.read('classes.jar'))
     stubs = work / 'android-stubs'
     subprocess.run(['javac', '-d', str(stubs),
                     *map(str, (ROOT / 'verification/android').glob('*.java'))], check=True)
     activity = source(clip + 'SettingsActivity.kt')
     screen = activity[activity.index('fun SettingsScreen(prefs:'):activity.index('\n@', activity.index('fun SettingsScreen(prefs:'))]
     content = activity[activity.index('private fun SettingsScreenContent('):]
-    loader = content[content.index('    val context ='):content.index('    LazyColumn(')]
-    loader = loader.replace('val apps by produceState', 'val appsState = produceState')
+    loader = content[content.index('    val context ='):content.index('    SettingsList {')]
     app_view = activity[activity.index('data class AppView('):]
     regression = (ROOT / 'verification/ComposeRebindingRegression.kt').read_text()
     regression = regression.replace('// PRODUCTION_SCREEN', '@Composable\n' + screen)
@@ -88,5 +93,5 @@ with tempfile.TemporaryDirectory(prefix='fuckapk-regressions-') as temp:
     run('compose-rebinding', [clip + 'Settings.kt'], {
         'Preferences.kt': (ROOT / 'verification/Preferences.kt').read_text(),
         'Regression.kt': regression,
-    }, [runtime_jar, compiler[4], jar('androidx.collection', 'collection-jvm', '1.5.0'), stubs],
+    }, [runtime_jar, saveable_jar, compiler[4], jar('androidx.collection', 'collection-jvm', '1.5.0'), stubs],
         compose=True, main_class='org.lyaaz.fuckclip.RegressionKt')

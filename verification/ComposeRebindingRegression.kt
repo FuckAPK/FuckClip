@@ -3,6 +3,7 @@ package org.lyaaz.fuckclip
 import android.content.SharedPreferences
 import android.content.FakePreferences
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import kotlinx.coroutines.*
@@ -12,10 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 typealias Drawable = String
 object ApplicationInfo { const val FLAG_SYSTEM = 1 }
-class ProbeApp(val packageName: String) {
+class ProbeApp(val packageName: String, val name: String = packageName) {
     val flags = 0
     fun loadIcon(pm: ProbePackageManager) = "icon:$packageName"
-    fun loadLabel(pm: ProbePackageManager) = packageName
+    fun loadLabel(pm: ProbePackageManager) = name
 }
 class LoadGate {
     val started = AtomicBoolean()
@@ -39,7 +40,10 @@ object Probe {
     var apps = emptyList<AppView>()
     var settings: Settings? = null
     lateinit var switches: SnapshotStateMap<String, Boolean>
-    lateinit var appsState: State<List<AppView>>
+    var visibleApps = emptyList<AppView>()
+    var enabledCount = 0
+    lateinit var search: (String) -> Unit
+    lateinit var filterEnabled: (Boolean) -> Unit
 }
 
 // PRODUCTION_SCREEN
@@ -47,11 +51,13 @@ object Probe {
 @Composable
 private fun SettingsScreenContent(prefs: SharedPreferences?, settings: Settings?) {
     // PRODUCTION_LOADER
-    val apps by appsState
     Probe.apps = apps
     Probe.settings = settings
     Probe.switches = switchStatus
-    Probe.appsState = appsState
+    Probe.visibleApps = visibleApps
+    Probe.enabledCount = enabledCount
+    Probe.search = { query = it }
+    Probe.filterEnabled = { enabledOnly = it }
 }
 
 // PRODUCTION_APP_VIEW
@@ -120,6 +126,44 @@ fun main() = runBlocking {
         lastGate.release.countDown()
         loaded("latest")
         check(Probe.switches["latest"] == false)
+
+        pm.gate = null
+        pm.apps = listOf(
+            ProbeApp("com.example.notes", "笔记"),
+            ProbeApp("org.example.chat", "Messenger"),
+            ProbeApp("org.example.mail", "Mail")
+        )
+        val filterPrefs = FakePreferences().apply { values["org.example.chat"] = true }
+        rebound(filterPrefs, Settings.getInstance(filterPrefs))
+        loaded("org.example.chat")
+        suspend fun expectVisible(vararg packages: String) = withTimeout(5000) {
+            while (Probe.visibleApps.map { it.packageName } != packages.toList()) {
+                tick(); delay(1)
+            }
+        }
+        expectVisible("org.example.chat", "org.example.mail", "com.example.notes")
+        check(Probe.enabledCount == 1)
+        Probe.search("  MESSENger  ")
+        expectVisible("org.example.chat")
+        Probe.search("COM.EXAMPLE")
+        expectVisible("com.example.notes")
+        Probe.search("笔记")
+        expectVisible("com.example.notes")
+        Probe.filterEnabled(true)
+        expectVisible()
+        Probe.search("")
+        expectVisible("org.example.chat")
+        Probe.switches["org.example.chat"] = false
+        expectVisible()
+        check(Probe.enabledCount == 0)
+        Probe.switches["com.example.notes"] = true
+        expectVisible("com.example.notes")
+        check(Probe.enabledCount == 1)
+        Probe.filterEnabled(false)
+        expectVisible("org.example.chat", "org.example.mail", "com.example.notes")
+        Probe.search("missing")
+        expectVisible()
+        println("App filtering: name, package, Chinese, case and whitespace; allowed-only reacts to toggles; totals update; empty results")
         println("Compose rebinding: old rows removed immediately; cancelled loaders cannot overwrite new state; user edits survive; same Preferences rebinding")
     } finally {
         pending.release.countDown()

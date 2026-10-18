@@ -12,28 +12,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
@@ -41,6 +39,13 @@ import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.lyaaz.ui.PreferenceGroup
+import org.lyaaz.ui.SettingsList
+import org.lyaaz.ui.SettingsLoading
+import org.lyaaz.ui.SettingsMessage
+import org.lyaaz.ui.SettingsScaffold
+import org.lyaaz.ui.SettingsSearchField
+import org.lyaaz.ui.SwitchPreferenceItem
 import org.lyaaz.ui.theme.AppTheme as Theme
 
 class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListener {
@@ -62,8 +67,12 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
         currentUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         setContent {
             Theme(applyStatusBarColor = true) {
-                if (isReady) {
-                    SettingsScreen(prefs, settings)
+                SettingsScaffold(stringResource(R.string.app_name)) {
+                    if (isReady) {
+                        SettingsScreen(prefs, settings)
+                    } else {
+                        ServiceUnavailable()
+                    }
                 }
             }
         }
@@ -90,11 +99,25 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
     }
 }
 
-@Preview
+@Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
     Theme(applyStatusBarColor = true) {
-        SettingsScreen(null, null)
+        SettingsScaffold(stringResource(R.string.app_name)) {
+            SettingsScreen(null, null)
+        }
+    }
+}
+
+@Composable
+private fun ServiceUnavailable() {
+    SettingsList {
+        item {
+            SettingsMessage(
+                title = stringResource(R.string.service_unavailable),
+                description = stringResource(R.string.service_unavailable_description)
+            )
+        }
     }
 }
 
@@ -114,6 +137,7 @@ private fun SettingsScreenContent(prefs: SharedPreferences?, settings: Settings?
     val switchStatus = remember(settings) {
         mutableStateMapOf<String, Boolean>()
     }
+    var isLoading by remember(settings) { mutableStateOf(true) }
     val apps by produceState<List<AppView>>(initialValue = emptyList(), key1 = settings) {
         val loaded = withContext(Dispatchers.IO) {
             pm.getInstalledApplications(0)
@@ -127,89 +151,123 @@ private fun SettingsScreenContent(prefs: SharedPreferences?, settings: Settings?
                         enabled = settings?.isEnabled(it.packageName) ?: false
                     )
                 }.sortedWith(
-                    compareBy({ !it.enabled }, { it.packageName })
+                    compareBy<AppView> { !it.enabled }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                        .thenBy { it.packageName }
                 )
         }
         switchStatus.putAll(loaded.associate { it.packageName to it.enabled })
         value = loaded
+        isLoading = false
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .imePadding()
-    ) {
-        items(apps, key = { it.packageName }) { app ->
-            SwitchPreferenceItem(
-                name = app.name,
-                packageName = app.packageName,
-                icon = app.icon,
-                checked = switchStatus.getOrDefault(app.packageName, false),
-                onCheckedChange = {
-                    switchStatus[app.packageName] = it
-                    prefs?.edit { putBoolean(app.packageName, it) }
-                },
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-                    fadeOutSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
-                )
-            )
-        }
-        item {
-            Spacer(
-                modifier = Modifier.windowInsetsBottomHeight(
-                    WindowInsets.systemBars
-                )
-            )
+    var query by rememberSaveable { mutableStateOf("") }
+    var enabledOnly by rememberSaveable { mutableStateOf(false) }
+    val enabledCount by remember {
+        derivedStateOf { switchStatus.count { it.value } }
+    }
+    val visibleApps by remember(apps) {
+        derivedStateOf {
+            val search = query.trim()
+            apps.filter { app ->
+                (!enabledOnly || switchStatus[app.packageName] == true) &&
+                    (app.name.contains(search, ignoreCase = true) ||
+                        app.packageName.contains(search, ignoreCase = true))
+            }
         }
     }
-}
 
-@Composable
-fun SwitchPreferenceItem(
-    name: String,
-    packageName: String,
-    icon: Drawable,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 8.dp, horizontal = 16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Image(
-                bitmap = remember(icon) { icon.toBitmap().asImageBitmap() },
-                contentDescription = "App Icon",
-                modifier = Modifier
-                    .size(48.dp)
+    SettingsList {
+        item(key = "summary") {
+            PreferenceGroup(highlighted = true) {
+                Column(
+                    Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.clipboard_access),
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Text(
+                        stringResource(R.string.clipboard_access_description),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        stringResource(R.string.enabled_summary, enabledCount, apps.size),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+        item(key = "search") {
+            SettingsSearchField(
+                query = query,
+                onQueryChange = { query = it },
+                label = stringResource(R.string.search_apps),
+                modifier = Modifier.padding(top = 8.dp)
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp)
-            ) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+        }
+        item(key = "filters") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !enabledOnly,
+                    onClick = { enabledOnly = false },
+                    label = { Text(stringResource(R.string.all_apps)) }
                 )
-                Text(
-                    text = packageName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                FilterChip(
+                    selected = enabledOnly,
+                    onClick = { enabledOnly = true },
+                    label = { Text(stringResource(R.string.enabled_apps)) }
                 )
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+        if (isLoading) {
+            item(key = "loading") {
+                SettingsLoading(stringResource(R.string.loading_apps))
+            }
+        } else if (visibleApps.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    stringResource(
+                        when {
+                            apps.isEmpty() -> R.string.no_apps
+                            query.isNotBlank() -> R.string.no_search_results
+                            else -> R.string.no_enabled_apps
+                        }
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(visibleApps, key = { it.packageName }) { app ->
+            val checked = switchStatus.getOrDefault(app.packageName, false)
+            PreferenceGroup(
+                modifier = Modifier.animateItem(),
+                highlighted = checked
+            ) {
+                SwitchPreferenceItem(
+                    title = app.name,
+                    summary = app.packageName,
+                    checked = checked,
+                    onCheckedChange = {
+                        prefs?.edit { putBoolean(app.packageName, it) }
+                        switchStatus[app.packageName] = it
+                    },
+                    leadingContent = {
+                        Image(
+                            bitmap = remember(app.icon) { app.icon.toBitmap().asImageBitmap() },
+                            contentDescription = null,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    },
+                    titleMaxLines = 1,
+                    summaryMinLines = 2,
+                    summaryMaxLines = 2,
+                    summaryVerticallyCentered = true
+                )
+            }
         }
     }
 }

@@ -9,6 +9,9 @@ android {
     defaultConfig {
         minSdk = 34
     }
+    androidResources {
+        localeFilters.add("zh-rCN")
+    }
 }
 
 dependencies {

@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Fuck Clipboard</string>
+    <string name="app_desc">允许应用在后台访问剪贴板</string>
+    <string name="clipboard_access">后台剪贴板访问</string>
+    <string name="clipboard_access_description">允许选中的应用在后台读取剪贴板，并隐藏读取提示。请仅为信任的应用开启。</string>
+    <string name="enabled_summary">已允许 %1$d / %2$d 个应用</string>
+    <string name="search_apps">搜索应用名称或包名</string>
+    <string name="all_apps">全部应用</string>
+    <string name="enabled_apps">已允许</string>
+    <string name="loading_apps">正在加载应用…</string>
+    <string name="no_apps">未找到用户安装的应用。</string>
+    <string name="no_search_results">没有匹配的应用，请尝试其他名称或包名。</string>
+    <string name="no_enabled_apps">尚未允许任何应用，请切换到“全部应用”开启。</string>
+    <string name="service_unavailable">Xposed 服务未连接</string>
+    <string name="service_unavailable_description">请在 Xposed 管理器中启用 Fuck Clipboard，并勾选“系统框架”作用域。首次激活后重启 Android，再从管理器打开此页面。服务连接前无法修改设置。</string>
+</resources>
